@@ -1,5 +1,6 @@
 const PAGE_SIZE = 12;
-const AUTOLOAD_PATH = "Planilha%20sem%20t%C3%ADtulo%20(84).xlsx";
+const QUERY_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRgDESmeJeSB9Vy9qDtf-fpfPETqKgy27Am4NpTN9baBkDaXRowSWD-ODIkyNLS9-gUn5riNkXtW0TL/pub?output=csv";
+const QUERY_REFRESH_INTERVAL = 5 * 60 * 1000;
 const STATUS_COLORS = { close: "#16836f", active: "#4b9cba", planned: "#d6a83c", return_to_station: "#d97861" };
 const PROMISE_COLORS = { "On Time": "#16836f", Delay: "#d76b58", Early: "#4b86a8", "Sem Promessa": "#a28b58" };
 const PROMISE_ICONS = {
@@ -78,6 +79,49 @@ function parseRows(rows) {
     promiseDate: excelDate(row.Data_Promessa),
     promiseStatus: row.STATUS_PROMESSA || "",
   }));
+}
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let field = "";
+  let quoted = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (quoted) {
+      if (char === '"' && text[index + 1] === '"') {
+        field += '"';
+        index += 1;
+      } else if (char === '"') {
+        quoted = false;
+      } else {
+        field += char;
+      }
+    } else if (char === '"' && field === "") {
+      quoted = true;
+    } else if (char === ",") {
+      row.push(field);
+      field = "";
+    } else if (char === "\n" || char === "\r") {
+      if (char === "\r" && text[index + 1] === "\n") index += 1;
+      row.push(field);
+      if (row.some((value) => value !== "")) rows.push(row);
+      row = [];
+      field = "";
+    } else {
+      field += char;
+    }
+  }
+
+  if (quoted) throw new Error("A Query retornou um CSV com aspas incompletas.");
+  row.push(field);
+  if (row.some((value) => value !== "")) rows.push(row);
+  if (!rows.length) throw new Error("A Query não retornou dados.");
+
+  const headers = rows[0].map((header, index) => (index === 0 ? header.replace(/^\uFEFF/, "") : header).trim());
+  const dataRows = rows.slice(1).map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""])));
+  return [Object.fromEntries(headers.map((header) => [header, ""])), ...dataRows];
 }
 
 function countBy(data, key) {
@@ -361,13 +405,13 @@ function renderTable() {
   }).join("") : '<tr><td colspan="8" class="empty-state">Nenhum pacote corresponde aos filtros.</td></tr>';
 }
 
-function displayData(nextRecords) {
+function displayData(nextRecords, source = "Planilha") {
   records = nextRecords;
   deliveredPackageIds = new Set(records.filter(isDelivered).map((record) => record.package).filter(Boolean));
   page = 1;
   populateFilters();
   renderTable();
-  $("updated-at").textContent = `Planilha carregada às ${new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(new Date())}`;
+  $("updated-at").textContent = `${source} atualizada às ${new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(new Date())}`;
   setNotice("");
 }
 
@@ -376,18 +420,33 @@ function loadWorkbook(buffer) {
   const workbook = window.XLSX.read(buffer, { type: "array", cellDates: true });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const rows = window.XLSX.utils.sheet_to_json(sheet, { defval: "", raw: true });
-  displayData(parseRows(rows));
+  displayData(parseRows(rows), "Planilha importada");
 }
 
+let queryRefreshInProgress = false;
+
 async function loadDefaultWorkbook() {
+  if (queryRefreshInProgress) return;
+  queryRefreshInProgress = true;
+  $("refresh-button").disabled = true;
   try {
-    const response = await fetch(AUTOLOAD_PATH);
-    if (!response.ok) throw new Error("A planilha padrão não está disponível nesta pasta.");
-    loadWorkbook(await response.arrayBuffer());
+    const response = await fetch(QUERY_CSV_URL, { cache: "no-store" });
+    if (!response.ok) throw new Error(`A Query respondeu com erro HTTP ${response.status}.`);
+    const contentType = response.headers.get("content-type") || "";
+    const csv = await response.text();
+    if (contentType.includes("text/html") || /^\s*<!doctype html/i.test(csv)) {
+      throw new Error("O Google Sheets retornou uma página HTML em vez do CSV. Confira se a Query está publicada para leitura.");
+    }
+    displayData(parseRows(parseCsv(csv)), "Query");
   } catch (error) {
-    $("package-rows").innerHTML = '<tr><td colspan="7" class="empty-state">Importe a planilha operacional para iniciar o monitor.</td></tr>';
-    $("updated-at").textContent = "Aguardando planilha";
-    setNotice(`${error.message} Use “Importar planilha” para selecionar um arquivo .xlsx ou .csv.`);
+    if (!records.length) {
+      $("package-rows").innerHTML = '<tr><td colspan="8" class="empty-state">A Query não pôde ser carregada. Importe uma planilha para iniciar o monitor.</td></tr>';
+      $("updated-at").textContent = "Aguardando Query";
+    }
+    setNotice(`Não foi possível atualizar a Query: ${error.message} Confira o acesso publicado ou importe uma planilha .xlsx ou .csv.`);
+  } finally {
+    queryRefreshInProgress = false;
+    $("refresh-button").disabled = false;
   }
 }
 
@@ -478,3 +537,4 @@ $("carrier-select-all").addEventListener("change", (event) => {
 $("prev-page").addEventListener("click", () => { page -= 1; renderTable(); });
 $("next-page").addEventListener("click", () => { page += 1; renderTable(); });
 loadDefaultWorkbook();
+window.setInterval(loadDefaultWorkbook, QUERY_REFRESH_INTERVAL);
