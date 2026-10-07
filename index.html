@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f4f7f5" />
+    <title>Central de Rotas | Monitor de entregas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script defer src="app.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="#inicio" aria-label="Central de Rotas, início">
+          <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+          <span>central<span class="brand-light"> de rotas</span></span>
+        </a>
+        <div class="side-label">OPERAÇÃO</div>
+        <a class="nav-item active" href="#visao-geral"><span class="nav-icon">◫</span> Visão geral</a>
+        <a class="nav-item" href="#rotas"><span class="nav-icon">↗</span> Rotas <span class="nav-count" id="nav-route-count">—</span></a>
+        <div class="side-bottom">
+          <span class="live-dot"></span>
+          <div><strong>Dados locais</strong><small>Planilha operacional</small></div>
+        </div>
+      </aside>
+
+      <main id="inicio">
+        <header class="topbar">
+          <div class="breadcrumb">OPERAÇÃO <span>/</span> <strong>MONITOR DE ENTREGAS</strong></div>
+          <div class="top-actions">
+            <span class="updated-label" id="updated-at">Carregando dados...</span>
+            <button class="icon-button" id="refresh-button" type="button" aria-label="Recarregar planilha" title="Recarregar planilha">↻</button>
+          </div>
+        </header>
+
+        <section class="content" id="visao-geral">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">ACOMPANHAMENTO OPERACIONAL</p>
+              <h1>Monitor de entregas</h1>
+              <p class="subtitle">Rotas, pacotes e previsões em um só lugar.</p>
+            </div>
+            <label class="upload-button" for="file-input"><span aria-hidden="true">↑</span> Importar planilha<input id="file-input" type="file" accept=".xlsx,.xls,.csv" /></label>
+          </div>
+
+          <div class="notice" id="notice" role="status" aria-live="polite" hidden></div>
+
+          <section class="metric-grid" aria-label="Indicadores da operação">
+            <article class="metric metric-primary">
+              <div class="metric-top"><span>Pacotes no filtro</span><span class="metric-icon">▤</span></div>
+              <strong class="metric-value" id="metric-packages">—</strong>
+              <span class="metric-foot">registros correspondentes</span>
+            </article>
+            <article class="metric">
+              <div class="metric-top"><span>Rotas em andamento</span><span class="metric-icon green">↗</span></div>
+              <strong class="metric-value" id="metric-active">—</strong>
+              <span class="metric-foot">com pacotes em rota</span>
+            </article>
+            <article class="metric">
+              <div class="metric-top"><span>Entregues</span><span class="metric-icon green">✓</span></div>
+              <strong class="metric-value" id="metric-delivered">—</strong>
+              <span class="metric-foot"><span id="delivered-rate">—</span> do total</span>
+            </article>
+            <article class="metric metric-alert">
+              <div class="metric-top"><span>Fora da previsão</span><span class="metric-icon coral">!</span></div>
+              <strong class="metric-value" id="metric-delayed">—</strong>
+              <span class="metric-foot">STATUS_PROMESSA: Delay</span>
+            </article>
+          </section>
+
+          <section class="insight-grid" aria-label="Resumo da operação">
+            <article class="panel status-panel">
+              <div class="panel-heading"><div><p class="eyebrow">DISTRIBUIÇÃO</p><h2>Status das rotas</h2></div><span class="panel-total" id="route-total">—</span></div>
+              <div class="status-bar" id="route-bar" aria-label="Distribuição dos status das rotas"></div>
+              <div class="legend" id="route-legend"></div>
+            </article>
+            <article class="panel promise-panel">
+              <div class="panel-heading"><div><p class="eyebrow">DISTRIBUIÇÃO</p><h2>STATUS_PROMESSA</h2></div><span class="mini-caption" id="promise-total">—</span></div>
+              <div class="promise-list" id="promise-chart" role="img" aria-label="Quantidade e percentual de pacotes por STATUS_PROMESSA"></div>
+            </article>
+            <article class="panel carrier-panel">
+              <div class="panel-heading"><div><p class="eyebrow">VOLUME POR PARCEIRO</p><h2 class="carrier-title"><svg class="carrier-truck-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h11v12H3zM14 10h4l3 3v5h-7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="7.5" cy="18" r="2" fill="white" stroke="currentColor" stroke-width="1.7"/><circle cx="17.5" cy="18" r="2" fill="white" stroke="currentColor" stroke-width="1.7"/></svg>Transportadoras</h2></div><span class="mini-caption" id="carrier-total">—</span></div>
+              <div class="carrier-list" id="carrier-list"></div>
+            </article>
+          </section>
+
+          <section class="panel address-dashboard-panel" aria-label="Painel de distribuição por tipo de endereço">
+            <div class="panel-heading"><div><p class="eyebrow">PERFIL DE ENTREGA</p><h2>TIPO_ENDERECO</h2></div><span class="mini-caption" id="address-total">—</span></div>
+            <div class="address-dashboard-grid" id="address-chart"></div>
+          </section>
+
+          <section class="panel table-panel" id="rotas">
+            <div class="table-heading">
+              <div><p class="eyebrow">DETALHAMENTO</p><h2>Pacotes e rotas</h2></div>
+              <span class="result-count" id="result-count">— registros</span>
+            </div>
+            <div class="filters">
+              <label class="search-box"><span aria-hidden="true">⌕</span><input id="search-input" type="search" placeholder="Cole IDs de rota ou pacote" autocomplete="off" /></label>
+              <label class="pending-only-filter"><input id="pending-filter" type="checkbox" /><span>Somente pendências</span></label>
+              <details class="multi-filter" id="route-filter">
+                <summary id="route-summary">Todos os status de rota</summary>
+                <div class="multi-filter-menu">
+                  <label class="multi-filter-select-all"><input id="route-select-all" type="checkbox" aria-controls="route-options"><span>Marcar/desmarcar todos</span></label>
+                  <button class="clear-filter" id="route-clear" type="button">Limpar seleção</button>
+                  <div class="multi-filter-options" id="route-options" role="group" aria-label="Status da rota"></div>
+                </div>
+              </details>
+              <details class="multi-filter" id="substatus-filter">
+                <summary id="substatus-summary">Status do Pacote</summary>
+                <div class="multi-filter-menu">
+                  <label class="multi-filter-select-all"><input id="substatus-select-all" type="checkbox" aria-controls="substatus-options"><span>Marcar/desmarcar todos</span></label>
+                  <button class="clear-filter" id="substatus-clear" type="button">Limpar seleção</button>
+                  <div class="multi-filter-options" id="substatus-options" role="group" aria-label="Status do Pacote"></div>
+                </div>
+              </details>
+              <select id="promise-filter" aria-label="Filtrar por STATUS_PROMESSA"><option value="">Todos os STATUS_PROMESSA</option></select>
+              <select id="address-filter" aria-label="Filtrar por TIPO_ENDERECO"><option value="">Todos os tipos de endereço</option></select>
+              <select id="city-filter" aria-label="Filtrar por CIDADE_DESTINO"><option value="">Todas as cidades</option></select>
+              <details class="multi-filter" id="carrier-filter">
+                <summary id="carrier-summary">Todas as transportadoras</summary>
+                <div class="multi-filter-menu">
+                  <label class="multi-filter-select-all"><input id="carrier-select-all" type="checkbox" aria-controls="carrier-options"><span>Marcar/desmarcar todos</span></label>
+                  <button class="clear-filter" id="carrier-clear" type="button">Limpar seleção</button>
+                  <div class="multi-filter-options" id="carrier-options" role="group" aria-label="Transportadoras"></div>
+                </div>
+              </details>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>ID_ROTA</th><th>ID_PACOTE</th><th>CIDADE_DESTINO</th><th>TIPO_ENDERECO</th><th>TRANSPORTADORA</th><th>STATUS_PACOTE</th><th>STATUS_PROMESSA</th></tr></thead>
+                <tbody id="package-rows"><tr><td colspan="7" class="empty-state">Carregando a planilha de operação...</td></tr></tbody>
+              </table>
+            </div>
+            <div class="pagination"><span id="page-label">—</span><div><button class="page-button" id="prev-page" type="button" aria-label="Página anterior">←</button><button class="page-button" id="next-page" type="button" aria-label="Próxima página">→</button></div></div>
+          </section>
+          <footer class="page-footer"><span>Central de Rotas</span><span>Fonte: planilha operacional · atualização manual</span></footer>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
