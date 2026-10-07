@@ -42,6 +42,10 @@ function safeText(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 }
 
+function normalizeCycle(value) {
+  return String(value ?? "").trim();
+}
+
 function setNotice(message) {
   $("notice").textContent = message;
   $("notice").hidden = !message;
@@ -62,7 +66,7 @@ function parseRows(rows) {
     base: row.Base_Origem || "",
     destination: row.Destino_XPT_Agencia || "",
     route: String(row.ID_Rota ?? ""),
-    cycle: row.Ciclo_Rota || "",
+    cycle: normalizeCycle(row.Ciclo_Rota),
     routeStatus: row.Status_Rota || "",
     carrier: row.Transportadora || "",
     vehicle: row.Tipo_Veiculo || "",
@@ -305,7 +309,8 @@ function renderTable() {
   const promiseStatus = $("promise-filter").value;
   const addressType = $("address-filter").value;
   const city = $("city-filter").value;
-  const cycle = $("cycle-filter").value;
+  const cycle = normalizeCycle($("cycle-filter").value);
+  const cycleRoutes = cycle ? new Set(records.filter((record) => normalizeCycle(record.cycle) === cycle).map((record) => record.route).filter(Boolean)) : null;
   const matchingRecords = records.filter((record) => {
     if (pendingOnly && (!record.package || deliveredPackageIds.has(record.package))) return false;
     if (selectedRouteStatuses.size && !selectedRouteStatuses.has(record.routeStatus)) return false;
@@ -313,7 +318,7 @@ function renderTable() {
     if (promiseStatus && record.promiseStatus !== promiseStatus) return false;
     if (addressType && record.addressType !== addressType) return false;
     if (city && record.city !== city) return false;
-    if (cycle && record.cycle !== cycle) return false;
+    if (cycleRoutes && !cycleRoutes.has(record.route)) return false;
     if (selectedCarriers.size && !selectedCarriers.has(record.carrier)) return false;
     const routeId = String(record.route).toLocaleLowerCase("pt-BR");
     const packageId = String(record.package).toLocaleLowerCase("pt-BR");
@@ -344,7 +349,7 @@ function renderTable() {
   const pageRows = filtered.slice(start, start + PAGE_SIZE);
   const uniquePackageCount = new Set(filtered.map((record) => record.package).filter(Boolean)).size;
   const visibleRouteCount = new Set(filtered.map((record) => record.route).filter(Boolean)).size;
-  $("result-count").textContent = pendingOnly ? `${fmt.format(uniquePackageCount)} pacotes · ${fmt.format(visibleRouteCount)} rotas` : terms.length ? `${fmt.format(filtered.length)} pacotes únicos` : `${fmt.format(filtered.length)} registros`;
+  $("result-count").textContent = cycle || pendingOnly ? `${fmt.format(uniquePackageCount)} pacotes · ${fmt.format(visibleRouteCount)} rotas` : terms.length ? `${fmt.format(filtered.length)} pacotes únicos` : `${fmt.format(filtered.length)} registros`;
   $("page-label").textContent = filtered.length ? `${fmt.format(start + 1)}–${fmt.format(Math.min(start + PAGE_SIZE, filtered.length))} de ${fmt.format(filtered.length)}` : "0 registros";
   $("prev-page").disabled = page <= 1;
   $("next-page").disabled = page >= pages;
