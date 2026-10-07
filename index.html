@@ -93,6 +93,11 @@
             <div class="address-dashboard-grid" id="address-chart"></div>
           </section>
 
+          <section class="panel cycle-dashboard-panel" aria-label="Painel de distribuição por ciclo">
+            <div class="panel-heading"><div><p class="eyebrow">CICLO OPERACIONAL</p><h2>Ciclo da rota</h2></div><span class="mini-caption" id="cycle-total">—</span></div>
+            <div class="promise-list" id="cycle-chart" role="img" aria-label="Quantidade e percentual de pacotes por ciclo da rota"></div>
+          </section>
+
           <section class="panel table-panel" id="rotas">
             <div class="table-heading">
               <div><p class="eyebrow">DETALHAMENTO</p><h2>Pacotes e rotas</h2></div>
@@ -120,6 +125,7 @@
               <select id="promise-filter" aria-label="Filtrar por STATUS_PROMESSA"><option value="">Todos os STATUS_PROMESSA</option></select>
               <select id="address-filter" aria-label="Filtrar por TIPO_ENDERECO"><option value="">Todos os tipos de endereço</option></select>
               <select id="city-filter" aria-label="Filtrar por CIDADE_DESTINO"><option value="">Todas as cidades</option></select>
+              <select id="cycle-filter" aria-label="Filtrar por ciclo da rota"><option value="">Todos os ciclos</option></select>
               <details class="multi-filter" id="carrier-filter">
                 <summary id="carrier-summary">Todas as transportadoras</summary>
                 <div class="multi-filter-menu">
@@ -131,8 +137,8 @@
             </div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>ID_ROTA</th><th>ID_PACOTE</th><th>CIDADE_DESTINO</th><th>TIPO_ENDERECO</th><th>TRANSPORTADORA</th><th>STATUS_PACOTE</th><th>STATUS_PROMESSA</th></tr></thead>
-                <tbody id="package-rows"><tr><td colspan="7" class="empty-state">Carregando a planilha de operação...</td></tr></tbody>
+                <thead><tr><th>ID_ROTA</th><th>ID_PACOTE</th><th>CIDADE_DESTINO</th><th>TIPO_ENDERECO</th><th>TRANSPORTADORA</th><th>CICLO</th><th>STATUS_PACOTE</th><th>STATUS_PROMESSA</th></tr></thead>
+                <tbody id="package-rows"><tr><td colspan="8" class="empty-state">Carregando a planilha de operação...</td></tr></tbody>
               </table>
             </div>
             <div class="pagination"><span id="page-label">—</span><div><button class="page-button" id="prev-page" type="button" aria-label="Página anterior">←</button><button class="page-button" id="next-page" type="button" aria-label="Próxima página">→</button></div></div>

@@ -15,6 +15,16 @@ const ADDRESS_ICONS = {
   business: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"></rect><path d="M8 7h2m4 0h2M8 11h2m4 0h2M10 21v-5h4v5"></path></svg>',
   default: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5m0-8h.01"></path></svg>',
 };
+const CYCLE_COLORS = { C1: "#4b9cba", C2: "#16836f", C3: "#d6a83c", C4: "#d97861", C5: "#a68aca", C6: "#7aa3d8" };
+const CYCLE_ICONS = {
+  default: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12a7 7 0 1 0 14 0m-2-2 2 2-2 2"></path></svg>',
+  C1: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8h10v8H7z"></path></svg>',
+  C2: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h8v10H8z"></path></svg>',
+  C3: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7"></path><path d="M9 7h8v8"></path></svg>',
+  C4: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"></path><path d="M12 8v4l3 2"></path></svg>',
+  C5: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h4l2-4 2 8 2-4h4"></path></svg>',
+  C6: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h12v8H6z"></path><path d="M9 12h6"></path></svg>',
+};
 const LABELS = { on_route: "Em rota", at_station: "Na base", delivered: "Entregue", delivered_place: "Entregue no local", transferred: "Transferido", problem_solving: "Em tratativa", buyer_absent: "Destinatário ausente", missrouted: "Rota incorreta", unvisited_address: "Endereço não visitado", inaccessible_address: "Acesso indisponível", business_closed: "Estabelecimento fechado", for_return: "Para devolução", soon_deliver: "Próxima entrega", residential: "Residencial", business: "Comercial", close: "Encerrada", active: "Em andamento", planned: "Planejada", return_to_station: "Retorno à base" };
 const REQUIRED_COLUMNS = ["Base_Origem", "Destino_XPT_Agencia", "ID_Rota", "Ciclo_Rota", "Status_Rota", "Transportadora", "Tipo_Veiculo", "ID_Pacote", "CIDADE_DESTINO", "TIPO_ENDERECO", "Status_Pacote_Na_Rota", "Substatus_Pacote_Na_Rota", "Data_Promessa", "STATUS_PROMESSA"];
 let records = [];
@@ -104,6 +114,7 @@ function renderMetrics(data) {
   renderRouteStatus(routes);
   renderPromiseChart(data);
   renderAddressChart(data);
+  renderCycleChart(data);
   renderCarriers(data);
 }
 
@@ -126,6 +137,19 @@ function renderCarriers(data) {
 
 function renderPromiseChart(data) {
   renderBreakdownChart(data, "promiseStatus", "promise-chart", "promise-total", PROMISE_COLORS, PROMISE_ICONS, false);
+}
+
+function renderCycleChart(data) {
+  const categories = [...countBy(data, "cycle")].filter(([value]) => value !== "Não informado").sort((a, b) => a[0].localeCompare(b[0], "pt-BR", { numeric: true }));
+  const total = data.length;
+  const max = categories[0]?.[1] || 1;
+  $("cycle-total").textContent = `${fmt.format(total)} ${total === 1 ? "pacote" : "pacotes"}`;
+  $("cycle-chart").innerHTML = categories.length ? categories.map(([value, count]) => {
+    const color = CYCLE_COLORS[value] || "#8a9691";
+    const percent = total ? (count * 100 / total).toFixed(1).replace(".", ",") : "0,0";
+    const icon = CYCLE_ICONS[value] || CYCLE_ICONS.default;
+    return `<div class="promise-row"><span class="promise-icon" style="--promise-color:${color}">${icon}</span><div><div class="promise-meta"><span class="promise-label">${safeText(value || "Não informado")}</span><strong>${fmt.format(count)}</strong></div><div class="promise-track"><span style="width:${count * 100 / max}%;background:${color}"></span></div><div class="promise-meta"><small>${percent}%</small><small>${fmt.format(Math.round((count * 100) / total || 0))}%</small></div></div></div>`;
+  }).join("") : '<div class="empty-state">Nenhum ciclo identificado.</div>';
 }
 
 function renderAddressChart(data) {
@@ -218,6 +242,7 @@ function populateFilters() {
   fillSelect($("promise-filter"), [...new Set(records.map((record) => record.promiseStatus).filter(Boolean))].sort(), "Todas as previsões");
   fillSelect($("address-filter"), [...new Set(records.map((record) => record.addressType).filter(Boolean))].sort(), "Todos os tipos de endereço");
   fillSelect($("city-filter"), [...new Set(records.map((record) => record.city).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR")), "Todas as cidades");
+  fillSelect($("cycle-filter"), [...new Set(records.map((record) => record.cycle).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true })), "Todos os ciclos", (value) => value);
   populateCarrierFilter();
 }
 
@@ -298,6 +323,7 @@ function renderTable() {
   const promiseStatus = $("promise-filter").value;
   const addressType = $("address-filter").value;
   const city = $("city-filter").value;
+  const cycle = $("cycle-filter").value;
   const matchingRecords = records.filter((record) => {
     if (pendingOnly && (!record.package || deliveredPackageIds.has(record.package))) return false;
     if (selectedRouteStatuses.size && !selectedRouteStatuses.has(record.routeStatus)) return false;
@@ -305,6 +331,7 @@ function renderTable() {
     if (promiseStatus && record.promiseStatus !== promiseStatus) return false;
     if (addressType && record.addressType !== addressType) return false;
     if (city && record.city !== city) return false;
+    if (cycle && record.cycle !== cycle) return false;
     if (selectedCarriers.size && !selectedCarriers.has(record.carrier)) return false;
     const routeId = String(record.route).toLocaleLowerCase("pt-BR");
     const packageId = String(record.package).toLocaleLowerCase("pt-BR");
@@ -343,8 +370,8 @@ function renderTable() {
     const status = record.substatus || record.packageStatus;
     const pillStatus = record.promiseStatus || status;
     const routePackageCount = packagesByRoute.get(record.route || "Sem ID")?.size || 0;
-    return `<tr><td><span class="route-id">${safeText(record.route || "—")}</span><small class="route-package-count">${fmt.format(routePackageCount)} ${pendingOnly ? "pendentes" : "pacotes"}</small></td><td><span class="package-id">${safeText(record.package || "—")}</span></td><td class="city-cell" title="${safeText(record.city)}">${safeText(record.city || "—")}</td><td>${safeText(label(record.addressType) || "—")}</td><td class="carrier-cell" title="${safeText(formatCarrierName(record.carrier))}">${safeText(formatCarrierName(record.carrier) || "—")}</td><td><span class="status-pill ${statusClass(status)}">${safeText(label(status))}</span></td><td><span class="status-pill ${statusClass(pillStatus)}">${safeText(label(pillStatus))}</span></td></tr>`;
-  }).join("") : '<tr><td colspan="7" class="empty-state">Nenhum pacote corresponde aos filtros.</td></tr>';
+    return `<tr><td><span class="route-id">${safeText(record.route || "—")}</span><small class="route-package-count">${fmt.format(routePackageCount)} ${pendingOnly ? "pendentes" : "pacotes"}</small></td><td><span class="package-id">${safeText(record.package || "—")}</span></td><td class="city-cell" title="${safeText(record.city)}">${safeText(record.city || "—")}</td><td>${safeText(label(record.addressType) || "—")}</td><td class="carrier-cell" title="${safeText(formatCarrierName(record.carrier))}">${safeText(formatCarrierName(record.carrier) || "—")}</td><td class="cycle-cell" title="${safeText(record.cycle || "—")}">${safeText(record.cycle || "—")}</td><td><span class="status-pill ${statusClass(status)}">${safeText(label(status))}</span></td><td><span class="status-pill ${statusClass(pillStatus)}">${safeText(label(pillStatus))}</span></td></tr>`;
+  }).join("") : '<tr><td colspan="8" class="empty-state">Nenhum pacote corresponde aos filtros.</td></tr>';
 }
 
 function displayData(nextRecords) {
@@ -460,7 +487,7 @@ $("carrier-select-all").addEventListener("change", (event) => {
   page = 1;
   renderTable();
 });
-["promise-filter", "address-filter", "city-filter"].forEach((id) => $(id).addEventListener("change", () => { page = 1; renderTable(); }));
+["promise-filter", "address-filter", "city-filter", "cycle-filter"].forEach((id) => $(id).addEventListener("change", () => { page = 1; renderTable(); }));
 $("prev-page").addEventListener("click", () => { page -= 1; renderTable(); });
 $("next-page").addEventListener("click", () => { page += 1; renderTable(); });
 loadDefaultWorkbook();
